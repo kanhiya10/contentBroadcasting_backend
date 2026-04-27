@@ -1,22 +1,23 @@
-const express = require("express");
-const app = express();
+require("dotenv").config();
+
+const app = require("./app");
 const pool = require("./config/db");
 
-async function testDB() {
+async function startServer() {
   try {
+    // DB connection test
     const res = await pool.query("SELECT NOW()");
     console.log("DB Connected:", res.rows[0]);
+
+    // Start server
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+
   } catch (err) {
-    console.error("Error:", err.message);
+    console.error("Failed to start server:", err.message);
   }
 }
 
-testDB();
-
-app.get("/", (req, res) => {
-  res.send("Hello World");
-});
-
-app.listen(3000, () => {
-  console.log("Server running on port 3000");
-});
+startServer();
