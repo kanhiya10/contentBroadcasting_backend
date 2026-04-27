@@ -34,6 +34,20 @@ exports.createContent = async (data, userId) => {
   return result.rows[0];
 };
 
+exports.getContent = async (status) => {
+  let query = `SELECT * FROM content`;
+  let values = [];
+
+  if (status) {
+    query += ` WHERE status = $1`;
+    values.push(status);
+  }
+
+  query += ` ORDER BY created_at DESC`;
+
+  const result = await pool.query(query, values);
+  return result.rows;
+}; 
 
 exports.getByUser = async (userId) => {
   const result = await pool.query(
@@ -45,4 +59,76 @@ exports.getByUser = async (userId) => {
   );
 
   return result.rows;
+};
+
+exports.updateStatus = async (contentId, status, rejectionReason, principalId) => {
+
+  // ✅ 1. Validate status
+  if (!["approved", "rejected"].includes(status)) {
+    throw new Error("Invalid status");
+  }
+
+  // ✅ 2. Fetch content
+  const contentRes = await pool.query(
+    "SELECT * FROM content WHERE id = $1",
+    [contentId]
+  );
+
+  if (contentRes.rowCount === 0) {
+    throw new Error("Content not found");
+  }
+
+  const content = contentRes.rows[0];
+
+  // ✅ 3. Prevent re-approval / re-rejection (optional but recommended)
+  if (content.status !== "pending") {
+    throw new Error("Content already reviewed");
+  }
+
+  // ✅ 4. If rejected → reason is mandatory
+  if (status === "rejected" && !rejectionReason) {
+    throw new Error("Rejection reason is required");
+  }
+
+  // ✅ 5. If approved → remove rejection reason
+  const finalRejectionReason = status === "approved" ? null : rejectionReason;
+
+  // ✅ 6. Update DB
+  const result = await pool.query(
+    `UPDATE content
+     SET status = $1,
+         rejection_reason = $2,
+         approved_by = $3,
+         approved_at = NOW()
+     WHERE id = $4
+     RETURNING *`,
+    [status, finalRejectionReason, principalId, contentId]
+  );
+
+  return result.rows[0];
+};
+
+exports.getLiveContentBySubject = async (subject) => {
+  const query = `
+    SELECT 
+      s.id AS schedule_id,
+      c.id AS content_id,
+      c.title,
+      c.file_url,
+      c.file_type,
+      c.uploaded_by AS teacher_id,
+      s.start_time,
+      s.end_time
+    FROM content_schedule s
+    JOIN content_slots sl ON s.slot_id = sl.id
+    JOIN content c ON s.content_id = c.id
+    WHERE LOWER(sl.subject) = LOWER($1)
+      AND c.status = 'approved'
+      AND NOW() >= s.start_time 
+      AND NOW() <= s.end_time
+    LIMIT 1;
+  `;
+
+  const result = await pool.query(query, [subject]);
+  return result.rows[0]; // Returns the row or undefined
 };

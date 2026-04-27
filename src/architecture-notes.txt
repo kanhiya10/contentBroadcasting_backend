@@ -1,0 +1,78 @@
+1.Authentication & RBAC flow
+
+Used JWT-based authentication (via jsonwebtoken) to keep the system stateless, embedding userId and role in
+the token for efficient request validation.
+Implemented layered middleware: authMiddleware for identity verification and allowRoles for enforcing
+role-based access (teacher, principal, student).
+Enforced authorization at both API and DB levels (e.g., restricting actions like approval to principal only),
+ensuring secure and consistent access control.
+
+2.Subject-based system design
+
+Designed a subject-based rotation system where each subject has an independent broadcast loop, using scheduled
+content with rotation_order and duration to dynamically determine active content based on current time.
+Kept scheduling separate from content (content = metadata, schedule = behavior) to ensure clean scalability and
+flexible rotation logic.
+Initially implemented public APIs at subject level, but later realized requirement was
+teacher-specific content delivery, highlighting a misinterpretation and need to refine filtering logic accordingly.
+
+3.Upload handling approach
+
+Implemented file uploads using Multer with local storage, enforcing strict validation on file type (JPG/PNG/GIF)
+and size limits (≤10MB) at middleware level.
+Separated file handling from business logic: multer processes files, while service layer stores metadata 
+(path, type, size) and manages content lifecycle (pending → approved/rejected).
+
+4.Approval workflow design
+
+Designed a strict approval workflow where uploaded content defaults to pending, and only the principal can 
+transition it to approved or rejected, with mandatory rejection_reason for transparency.
+Enforced this via RBAC and backend validation to prevent unauthorized state changes and ensure only approved
+content becomes eligible for scheduling.
+Kept approval separate from scheduling, so approval validates content quality while scheduling controls 
+visibility and rotation.
+
+5.Scheduling/rotation logic
+
+Designed scheduling as a separate layer from content, using a content_schedule table with rotation_order and 
+duration to support time-based circular rotation per subject.
+Chose a dynamic computation approach (based on current time and total cycle duration) instead of storing active
+content, ensuring stateless and scalable broadcast logic.
+Currently implemented filtering for approved + within time window content, but the actual rotation selection 
+logic (time-slice based looping) is not yet implemented and remains the next step.
+
+6. Database design decisions
+
+Designed a normalized relational schema separating concerns: users (with roles), content (metadata + lifecycle)
+, and content_schedule (rotation behavior), ensuring scalability and clean responsibility boundaries.
+Implemented a teacher–subject mapping (assigned by principal) to strictly control which subjects a teacher can
+upload content for, enforcing domain-level access at DB + API layers.
+Current public API fetches content subject-wise rather than teacher-specific, reflecting an initial design 
+assumption that may need refinement based on requirements.
+
+7.Folder structure
+
+Followed a layered architecture with clear separation: routes → controllers → services → models, plus middlewares
+and utils, to keep responsibilities isolated and code maintainable.
+Centralized shared concerns like DB connection (config/db.js) and auth/role checks in middleware, enabling reuse
+across modules.
+Placed all source code under src/ with a single entry point (index.js / app.js) to keep the project organized
+and scalable as features grow.
+
+8.Middleware usage
+
+Used middleware to handle cross-cutting concerns like authentication (authMiddleware) and role-based authorization
+(allowRoles), keeping controllers clean and focused on business logic.
+Designed middleware to be composable and reusable, allowing flexible stacking (e.g., auth → role check → route
+handler) across different APIs.
+Centralized validation and access control in middleware to ensure consistent enforcement and reduce duplication
+across routes.
+
+9.Scalability approach (caching, queues, etc.)
+
+Kept the broadcast layer stateless, computing active content on demand (time-based rotation) so it scales
+horizontally behind a load balancer without shared state.
+Designed for caching (e.g., Redis) to store per-subject rotation sets/metadata and reduce DB reads for 
+high-traffic public APIs.
+Planned for async workloads (uploads/processing/notifications) via message queues (e.g., Apache Kafka), 
+decoupling services and improving throughput.

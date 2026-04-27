@@ -9,7 +9,20 @@ const upload = require("../config/multer");
 
 
 
-// Upload content (Teacher only)
+router.get(
+  "/",
+  authMiddleware,
+  allowRoles("principal"),
+  contentController.getContent
+);
+
+router.patch(
+  "/:id/status",
+  authMiddleware,
+  allowRoles("principal"), 
+  contentController.updateContentStatus
+);
+
 router.post(
   "/upload",
   authMiddleware,
@@ -24,6 +37,11 @@ router.get(
   authMiddleware,
   allowRoles("teacher"),
   contentController.getMyContent
+);
+
+router.get(
+  "/live/:subject",
+  contentController.getLiveContentBySubject
 );
 
 

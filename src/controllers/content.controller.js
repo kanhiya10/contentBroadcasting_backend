@@ -28,6 +28,22 @@ exports.uploadContent = async (req, res) => {
   }
 };
 
+exports.getContent = async (req, res) => {
+  try {
+    const { status } = req.query;
+
+    const data = await contentService.getContent(status);
+
+    res.json({
+      message: "Content fetched",
+      data,
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 exports.getMyContent = async (req, res) => {
   try {
     const contents = await contentService.getByUser(req.user.id);
@@ -38,5 +54,48 @@ exports.getMyContent = async (req, res) => {
     res.status(400).json({
       error: err.message,
     });
+  }
+};
+
+exports.updateContentStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, rejection_reason } = req.body;
+
+    const result = await contentService.updateStatus(
+      id,
+      status,
+      rejection_reason,
+      req.user.id
+    );
+
+    res.json({
+      message: "Content status updated successfully",
+      data: result,
+    });
+
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+exports.getLiveContentBySubject = async (req, res) => {
+  try {
+    const { subject } = req.params;
+
+    const liveContent = await contentService.getLiveContentBySubject(subject);
+
+    if (!liveContent) {
+      return res.status(200).json({ 
+        message: "No content available" 
+      });
+    }
+
+    res.json({
+      message: `Currently broadcasting in ${subject}`,
+      data: liveContent,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 };
